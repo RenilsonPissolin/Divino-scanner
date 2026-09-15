@@ -1,1 +1,1 @@
-{"version":1,"failures":[{"contract":"test/DivinoV17.t.sol:DivinoV17Test","test":"invariant_solvency"}]}
+{"version":1,"failures":[{"contract":"test/DivinoV18.t.sol:DivinoV18Test","test":"invariant_solvency"}]}

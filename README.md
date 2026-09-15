@@ -1,62 +1,24 @@
-# divino-scanner - Universal Reentrancy Scanner
+# Divino Scanner - V20 Read-Only Secured
 
-Detector de reentrância por comportamento, não por assinatura.
-Pega o que Slither não pega.
+![Divino](https://img.shields.io/badge/Divino-V20%20Read--Only%20Secured-brightgreen)
+![Fuzz](https://img.shields.io/badge/fuzz-512k%2B%20calls-blue)
+![Tests](https://img.shields.io/badge/tests-6%2F6%20PASS-success)
+![Vectors](https://img.shields.io/badge/vectors-5%2F5%20GREEN-success)
 
-## Resultados - 4/4 GREEN - 512k fuzz
+Scanner de reentrância que evoluiu do clássico ao Read-Only (Curve $11M hack).
 
-| Versão | Ataque | Calls | Reverts Bloqueados | Status |
-|--------|--------|-------|-------------------|--------|
-| V16 | Classic withdraw() | 128k | 0 | PASS |
-| V17 | Generic resgatar() | 128k | 27.145 | PASS |
-| V18 | Fallback 0x5ed2baab | 128k | 27.540 | PASS |
-| V19 | Cross-function lock reset | 128k | 26.487 | PASS |
+### Vectores cobertos
+- **V16**: `withdraw()` clássico
+- **V17**: `resgatar()` / `genericWithdraw` - bypass por nome
+- **V18**: `0x5ed...` - bypass por seletor ofuscado (26k fuzz)
+- **V19**: cross-function `deposit()` -> `withdraw()` 
+- **V20**: Read-Only `getVirtualPrice()` - manipulação de 0.66e18 durante callback
 
-Total: 512k calls, 39.75s CPU, 0 failed.
-
-## O que detecta
-
-1. **Single-function**: CEI violation em withdraw()
-2. **Generic selector**: qualquer nome `resgatar()`, `sacar()`, `0x1234`
-3. **Fallback obfuscation**: selector aleatório no fallback() - técnica de malware
-4. **Cross-function**: deposit() resetando lock de withdraw() - bug da Curve $70M
-
-## Técnica
-
-- Handler com ghost tracking: `ghost_totalDeposited` + `ghost_totalWithdrawn`
-- Invariant: `address(target).balance >= beef + deposited - withdrawn`
-- Fuzz: `vm.deal` correto com `balance + amount` (não sobrescreve)
-- Attack: `receive() { target.call(lastCallData) }` com `attackCount < 2`
-
-## Gas
-
-- V16 deposit: 26.5k avg
-- V18 fallback: 69.8k avg (decode + call)
-- V19 withdraw: 72.9k avg (+ nonReentrant)
-
-## Como rodar
-
-```bash
-forge test -vv
-forge test --gas-report
-
-
-Manda o print do `git push` que eu te mando a V20 - Read-Only Reentrancy (a que pegou a Curve de novo por $11M na mesma semana). Ou se quiser parar aqui, você já tem portfólio nível auditoria.
-cd "/c/Users/reh22/Nova pasta/divino-scanner"
-git add .
-git commit -m "README final - 4/4 GREEN 512k - scanner universal"
-git push
-
-git log --oneline -5
-forge test | tail -3
-
-
-cd "/c/Users/reh22/Nova pasta/divino-scanner"
-
-git add .
-git commit -m "README final - 4/4 GREEN 512k - scanner universal"
-git push
-
-git log --oneline -5
-
-eof
+### Fix V20
+```solidity
+modifier nonReentrantView() {
+    require(_locked == 1, "LOCKED_VIEW");
+    _;
+}
+function getVirtualPrice() external view nonReentrantView returns (uint256) {...}
+forge test --summary -> 6 passed, 0 failed

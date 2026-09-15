@@ -5,43 +5,48 @@ interface IV20 {
     function getVirtualPrice() external view returns (uint256);
     function deposit() external payable;
     function withdraw() external;
+    function lpBalance(address) external view returns (uint256);
 }
 
 contract DivinoScannerV20 {
     function scanReadOnly(address target) public returns (bool isVulnerable) {
-        // Se getVirtualPrice reverter durante locked = protegido
-        // Se retornar valor manipulado = vulnerável
-        V20Tester tester = new V20Tester(target);
+        // Deploy tester já com saldo
+        V20Tester tester = new V20Tester{value: 2 ether}(target);
         try tester.test() returns (uint256 priceNormal, uint256 priceDuring) {
-            if (priceDuring != priceNormal) {
-                return true; // VULNERAVEL
-            }
-            return false; // seguro
+            // Se preço mudou durante withdraw = VULNERÁVEL
+            // Se view reverteu, priceDuring = MAX = SEGURO (tem nonReentrantView)
+            if (priceDuring == type(uint256).max) return false;
+            return priceDuring != priceNormal;
         } catch {
-            return false; // view protegida com nonReentrantView = seguro
+            return false; // view protegida
         }
     }
 }
 
 contract V20Tester {
-    address target;
-    constructor(address _t) { target = _t; }
+    address public target;
     uint256 public priceDuring;
-    bool attacked;
-    
+    uint256 public priceNormal;
+    bool public attacked;
+
+    constructor(address _t) payable {
+        target = _t;
+    }
+
     function test() external returns (uint256, uint256) {
-        uint256 priceNormal = IV20(target).getVirtualPrice();
+        priceNormal = IV20(target).getVirtualPrice();
         IV20(target).deposit{value: 1 ether}();
         IV20(target).withdraw();
         return (priceNormal, priceDuring);
     }
+
     receive() external payable {
         if (!attacked) {
             attacked = true;
             try IV20(target).getVirtualPrice() returns (uint256 p) {
                 priceDuring = p;
             } catch {
-                priceDuring = type(uint256).max; // view protegida, reverteu = SEGURO
+                priceDuring = type(uint256).max;
             }
         }
     }

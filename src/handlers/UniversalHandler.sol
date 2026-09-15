@@ -7,24 +7,15 @@ contract UniversalHandler is Test {
     uint256 public ghost_totalDeposited;
     uint256 public ghost_totalWithdrawn;
     mapping(address => uint256) public ghost_userDeposits;
-    
     bytes public lastCallData;
-    uint256 private attackCount;
+    uint256 public attackCount;
 
-    constructor(address _t) { target = _t; }
-
-    receive() external payable {
-        if (attackCount < 3 && lastCallData.length > 0) {
-            attackCount++;
-            (bool s,) = target.call(lastCallData);
-            s;
-        }
-    }
+    constructor(address _target) { target = _target; }
 
     function deposit(uint96 amount) public {
         amount = uint96(bound(amount, 0.1 ether, 1 ether));
         attackCount = 0;
-        vm.deal(address(this), amount);
+        vm.deal(address(this), address(this).balance + amount);
         (bool success,) = target.call{value: amount}(abi.encodeWithSignature("deposit()"));
         if (success) {
             ghost_totalDeposited += amount;
@@ -32,19 +23,26 @@ contract UniversalHandler is Test {
         }
     }
 
-    // GENERICO: ataca qualquer funcao que tira ETH
     function genericWithdraw(uint96 amount) public {
         uint256 bal = ghost_userDeposits[address(this)];
         if (bal == 0) return;
         amount = uint96(bound(amount, 0.1 ether, bal));
-        // Tenta resgatar, claim, withdraw, sacar - qualquer um
         bytes memory data = abi.encodeWithSignature("resgatar(uint256)", amount);
+        uint256 before = address(this).balance;
         lastCallData = data;
         attackCount = 0;
         (bool success,) = target.call(data);
-        if (success) {
-            ghost_totalWithdrawn += amount;
-            ghost_userDeposits[address(this)] -= amount;
+        if (success && address(this).balance > before) {
+            uint256 gained = address(this).balance - before;
+            ghost_totalWithdrawn += gained;
+            ghost_userDeposits[address(this)] -= gained;
+        }
+    }
+
+    receive() external payable {
+        if (attackCount < 2 && lastCallData.length > 0) {
+            attackCount++;
+            target.call(lastCallData);
         }
     }
 }

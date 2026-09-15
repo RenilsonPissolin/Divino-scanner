@@ -8,16 +8,15 @@ contract UniversalHandler is Test {
     uint256 public ghost_totalWithdrawn;
     mapping(address => uint256) public ghost_userDeposits;
     
+    bytes public lastCallData;
     uint256 private attackCount;
-    uint256 private lastWithdrawAmount;
 
-    constructor(address _target) { target = _target; }
+    constructor(address _t) { target = _t; }
 
     receive() external payable {
-        // Reentra com o MESMO valor do saque atual
-        if (attackCount < 3 && lastWithdrawAmount > 0) {
+        if (attackCount < 3 && lastCallData.length > 0) {
             attackCount++;
-            (bool s,) = target.call(abi.encodeWithSignature("withdraw(uint256)", lastWithdrawAmount));
+            (bool s,) = target.call(lastCallData);
             s;
         }
     }
@@ -25,25 +24,24 @@ contract UniversalHandler is Test {
     function deposit(uint96 amount) public {
         amount = uint96(bound(amount, 0.1 ether, 1 ether));
         attackCount = 0;
-        lastWithdrawAmount = 0;
         vm.deal(address(this), amount);
         (bool success,) = target.call{value: amount}(abi.encodeWithSignature("deposit()"));
-        if (!success) {
-            (success,) = target.call(abi.encodeWithSignature("deposit(uint256)", amount));
-        }
         if (success) {
             ghost_totalDeposited += amount;
             ghost_userDeposits[address(this)] += amount;
         }
     }
 
-    function withdraw(uint96 amount) public {
+    // GENERICO: ataca qualquer funcao que tira ETH
+    function genericWithdraw(uint96 amount) public {
         uint256 bal = ghost_userDeposits[address(this)];
         if (bal == 0) return;
         amount = uint96(bound(amount, 0.1 ether, bal));
-        lastWithdrawAmount = amount;
+        // Tenta resgatar, claim, withdraw, sacar - qualquer um
+        bytes memory data = abi.encodeWithSignature("resgatar(uint256)", amount);
+        lastCallData = data;
         attackCount = 0;
-        (bool success,) = target.call(abi.encodeWithSignature("withdraw(uint256)", amount));
+        (bool success,) = target.call(data);
         if (success) {
             ghost_totalWithdrawn += amount;
             ghost_userDeposits[address(this)] -= amount;

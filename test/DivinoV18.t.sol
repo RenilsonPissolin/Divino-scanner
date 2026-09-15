@@ -14,11 +14,14 @@ contract DivinoV18Test is Test {
         target.deposit{value: 10 ether}();
         targetContract(address(handler));
     }
-    function invariant_solvency() public {
+    function invariant_solvency() public view {
         if (address(handler).balance > handler.ghost_totalWithdrawn()) {
+            // Handler recebeu mais do que ghost conta = reentrancia real
             if (address(target).balance < 10 ether + handler.ghost_totalDeposited() - handler.ghost_totalWithdrawn()) {
                 assertTrue(false, "V18 FAIL - SELECTOR DESCOBERTO! Scanner universal pegou saqueSecreto_9x7z");
             }
         }
+        // Solvencia basica
+        assertGe(address(target).balance + handler.ghost_totalWithdrawn(), handler.ghost_totalDeposited() + 10 ether - 1 ether, "insolvente");
     }
 }

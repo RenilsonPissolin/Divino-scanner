@@ -9,3 +9,10 @@
 
 ## Run
 forge test -vv
+
+## Gas Metrics - V15
+- Deposit avg: 132k gas
+- Withdraw avg: 93k gas
+- 128k calls - 0 reverts
+- Total test time: 41.68s
+
